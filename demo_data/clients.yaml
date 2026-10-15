@@ -1,0 +1,25 @@
+freelancer:
+  name: Maya Chen
+  business_name: Maya Chen Design
+  email: maya@mayachen.example
+clients:
+  - slug: acme
+    name: Acme Outdoor Ltd
+    contact_name: Anna Kowalski
+    contact_email: anna@acme-outdoor.example
+    email_domains: [acme-outdoor.example]
+    slack_channels: [acme-website]
+    slack_user_names: [Anna Kowalski]
+    calendar_match: ["Acme"]          # event title contains, or attendee domain matches
+    timetracker_client: Acme Outdoor
+    contract_file: contracts/acme_contract.pdf
+  - slug: bright-bakery
+    name: Bright Bakery
+    contact_name: Tom Reyes
+    contact_email: tom@brightbakery.example
+    email_domains: [brightbakery.example]
+    slack_channels: []
+    slack_user_names: []
+    calendar_match: ["Bright Bakery"]
+    timetracker_client: Bright Bakery
+    contract_file: contracts/bright_bakery_contract.pdf

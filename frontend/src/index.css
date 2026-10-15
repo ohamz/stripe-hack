@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-accent: #1f5a3d;
+  --color-accent-dark: #163f2b;
+  --color-accent-soft: #e8f1ec;
+}
+
+html, body { background: #ffffff; color: #0f172a; }
+body { font-feature-settings: "tnum" 1; }

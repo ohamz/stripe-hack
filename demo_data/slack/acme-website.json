@@ -1,0 +1,10 @@
+[
+  {"ts": "1791291900", "user": "U_ANNA", "user_name": "Anna Kowalski", "channel": "acme-website", "text": "Sorry, could we do one more pass on the Home hero? The team wants the headline bigger and a different photo."},
+  {"ts": "1791454800", "user": "U_ANNA", "user_name": "Anna Kowalski", "channel": "acme-website", "text": "Could you swap the footer logo for the new PNG I put in the shared folder?"},
+  {"ts": "1791532500", "user": "U_ANNA", "user_name": "Anna Kowalski", "channel": "acme-website", "text": "Thanks, the logo looks perfect!"},
+  {"ts": "1792152600", "user": "U_ANNA", "user_name": "Anna Kowalski", "channel": "acme-website", "text": "Can you resize the hero image to 1080×1080 for Instagram? Just need it today."},
+  {"ts": "1792593900", "user": "U_ANNA", "user_name": "Anna Kowalski", "channel": "acme-website", "text": "Quick one, could you export all the icons as SVGs for the dev team?"},
+  {"ts": "1792858800", "user": "U_ANNA", "user_name": "Anna Kowalski", "channel": "acme-website", "text": "The contact form looks broken on my phone, can you check?"},
+  {"ts": "1793275200", "user": "U_ANNA", "user_name": "Anna Kowalski", "channel": "acme-website", "text": "Spotted a typo on the flyer: 'Lauch' should be 'Launch'. Can you fix it before printing?"},
+  {"ts": "1793376000", "user": "U_ANNA", "user_name": "Anna Kowalski", "channel": "acme-website", "text": "Next month, could you also redesign our pitch deck?"}
+]

@@ -1,0 +1,29 @@
+[project]
+name = "tab-backend"
+version = "0.1.0"
+description = "Tab: keeps a fair tab with every client and bills the rest through Stripe"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlmodel",
+    "cognee",
+    "stripe",
+    "pyyaml",
+    "icalendar",
+    "python-dotenv",
+    "pypdf",
+    "fpdf2",
+    "httpx",
+]
+
+[dependency-groups]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
