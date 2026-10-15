@@ -113,7 +113,7 @@ async def phase6(session) -> None:
     configure()
     s_inv = stripe.Invoice.retrieve(inv.stripe_invoice_id)
     proof_url = f"{get_settings().public_base_url}/proof/{inv.proof_token}"
-    fields = [f.get("value") for f in (s_inv.get("custom_fields") or [])]
+    fields = [f.value for f in (s_inv.custom_fields or [])]
     check(proof_url in (s_inv.description or "") or proof_url in fields,
           f"Stripe invoice carries the proof link {proof_url} (description/custom field)")
     careers_item = session.exec(select(SourceItem).where(SourceItem.external_id == "a10.careers@acme-outdoor.example")).one()

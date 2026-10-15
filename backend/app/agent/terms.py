@@ -163,6 +163,12 @@ async def extract_contract_terms(session: Session, client: Client) -> list[Contr
     )
     extracted = await structured(TERMS_PROMPT, text, ExtractedTerms)
     rows, missing, warnings = validate_terms(extracted, clauses)
+    if missing:
+        # One retry that names the missing keys. The model must still read them from the contract; nothing is defaulted.
+        retry_text = text + (f"\n\nYour previous answer left out: {', '.join(missing)}. Read the contract again and fill them "
+                             "in if the contract states them (a list may be empty only if the contract names none).")
+        extracted = await structured(TERMS_PROMPT, retry_text, ExtractedTerms)
+        rows, missing, warnings = validate_terms(extracted, clauses)
     for w in warnings:
         emit(session, "terms_warning", f"{client.name} contract: {w}", level="warn", client=client.slug)
     if missing:

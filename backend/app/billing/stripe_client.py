@@ -25,5 +25,6 @@ def configure() -> None:
 def account_summary() -> dict:
     configure()
     acct = stripe.Account.retrieve()
-    return {"id": acct.id, "livemode": False, "display_name": getattr(acct, "settings", None) and
-            acct.settings.get("dashboard", {}).get("display_name")}
+    data = acct.to_dict()
+    return {"id": acct.id, "livemode": False,
+            "display_name": ((data.get("settings") or {}).get("dashboard") or {}).get("display_name")}

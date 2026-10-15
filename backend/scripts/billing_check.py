@@ -84,7 +84,7 @@ async def main() -> int:
         after = session.exec(select(Invoice)).all()
         check(len(after) == 1 and not [r for r in second if r.get("status") == "raised"], "second run creates nothing new")
         listed = stripe.Invoice.list(customer=inv.stripe_customer_id, limit=10)
-        same_period = [i for i in listed.data if (i.metadata or {}).get("period") == "2026-10"]
+        same_period = [i for i in listed.data if (i.metadata.to_dict() if i.metadata else {}).get("period") == "2026-10"]
         check(len(same_period) == 1, f"Stripe has exactly one 2026-10 invoice for the customer (got {len(same_period)})")
 
         if args.pay:

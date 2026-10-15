@@ -1,190 +1,191 @@
 # Tab: Build Report
 
 ## 1. Summary
-- Overall status: **partial (built, awaiting keys)**. Everything in PLAN.md is built. Only the parts that can run without an API key were run and verified. `.env` holds placeholder values: `LLM_API_KEY` is 6 characters starting `sk-`, and `STRIPE_SECRET_KEY` is 11 characters starting `sk_test_`. Tab treats both as missing. No Cognee, LLM or Stripe call has been made, and no result was faked or mocked.
-- What works end to end today, without keys:
-  - `make reset && make seed && make dev` from the repo. Reset wipes SQLite and runs `cognee.forget(everything=True)`, which succeeded on an empty store. Seed loads every demo file and routes it to the right client. The API and web app start and show clear "LLM key missing" and "Stripe key missing" banners instead of data that doesn't exist.
-  - Ingestion matches the Phase 1 counts exactly (unit test `test_phase1_counts`), including the single unassigned time entry (N03) and the goodwill rules routed into both client datasets.
-  - All deterministic logic is unit-tested, 71 tests passing: money maths and 15-minute rounding, meeting counting, the goodwill allowance and typo rule, routing, the London-time period and demo clock logic, the duplicate-invoice guard (including "a failed run is never retried"), the `sk_test_` guard, contract clause parsing, and the health numbers.
-  - The calendar-to-meeting requests (no LLM needed) and the "Simulated" message flow work. Simulated messages are stored, labelled, and paused with a clear "key missing" message.
-  - Every page renders against the no-key state. I checked Overview, Client, Settings and Memory with headless Chrome screenshots.
-- Time spent per phase (approximate, about 40 minutes of wall time in total): Phase 0 (setup, docs, versions) ~8 min · Phase 1 (demo data, connectors, routing) ~7 min · Phases 2–4, 6, 7 backend code ~12 min · unit tests ~4 min · Phase 5 frontend ~8 min · README and report ~3 min.
+- Overall status: **partial, demo-ready.** The full pipeline ran with real keys. Tab raised the Acme invoice of **£487.50** in Stripe test mode with 5 billable lines and 3 £0 "On the house" lines, and no Bright Bakery invoice, as PLAN.md requires.
+- Acceptance (read-only scoring of the seeded database): **Acme 15/16, Bright Bakery 2/4**, totals 2/2, health 0/2. The model is gpt-5-nano, the cheapest available.
+- What works end to end:
+  - **Ingestion and memory.** Demo files are routed to clients. Every client source item is remembered in Cognee, in per-client datasets with node sets.
+  - **Contract and rules.** Contract terms are extracted with clause references (Phase 2: **51/51**). G1 and G2 are parsed correctly.
+  - **Decisions.** 20 decisions, each with an explanation, evidence and "What Tab remembered", written back to Cognee.
+  - **Billing.** The billing job raised exactly one Acme invoice, finalized and sent. Stripe accepted the £0 lines and the "Proof of work" custom field. The second run created nothing new.
+  - **Dashboard and proof page.** They render with real data (checked by screenshot). The Overview page has a Billing policy card.
+- Not yet verified with real keys:
+  - disputes (left for the video);
+  - Ask Tab;
+  - the Memory graph render;
+  - the health narrative;
+  - payment status turning "paid" (you'll pay on camera).
+- Time: building took about 40 min (first session). With real keys: the smoke tests took about 2 min. `make reset && make seed` took **30.6 min** but produced 0 decisions because of the terms bug in section 9. The incremental pipeline run after the fix took **15.9 min**. The billing check took about 1 min.
 
 ## 2. Environment
-- OS: macOS (Darwin 25.6.0, arm64)
-- Python 3.12.11 (installed with `uv python install 3.12`; venv at `backend/.venv` via `uv sync`)
-- Node v25.9.0, npm 11.12.1
-- cognee **1.6.4**
-- stripe (Python) **16.0.0**, pinned API version `2026-09-30.endive`
-- Also: fastapi 0.143.2, sqlmodel 0.0.48, litellm 1.96.2, pydantic 2.14.1, icalendar 7.3.0, pypdf 6.20.1, fpdf2 2.8.9. Frontend: React 19.3.1, Vite 8.3.4, Tailwind CSS 4.3.3, TypeScript 5.9.3, react-router-dom 7.18.4.
-- LLM provider and model: OpenAI through Cognee's defaults, as you asked (installed defaults: `openai/gpt-5.6-luna`, embeddings `openai/text-embedding-3-large`). **Not exercised yet: no key.**
+- macOS (Darwin 25.6.0, arm64), Python 3.12.11 (uv), Node v25.9.0, npm 11.12.1
+- cognee **1.6.4**; stripe (Python) **16.0.0**, API version `2026-09-30.endive`
+- Frontend: React 19.3.1, Vite 8.3.4, Tailwind CSS 4.3.3, TypeScript 5.9.3
+- **LLM: `openai/gpt-5-nano`** (`LLM_PROVIDER=openai`, `LLM_MODEL=openai/gpt-5-nano`)
+  - Price: $0.05 per 1M input tokens, $0.005 cached, $0.40 per 1M output tokens.
+  - It is the cheapest text model on OpenAI's pricing page (developers.openai.com/api/docs/pricing, 15 Oct 2026). Its model page lists `structured_outputs`, and the key has access to it.
+  - The `openai/` prefix matches Cognee's default model name (`openai/gpt-5.6-luna`). Cognee confirmed it reads `openai openai/gpt-5-nano`.
+- Embeddings: Cognee default `openai/text-embedding-3-large` (unchanged)
+- Stripe account: `acct_1UQtEZFyqsEONG0f` (test mode, "sidebus sandbox")
 
 ## 3. Phase checklist
-| Phase | Status (done / partial / not started / blocked) | Check result | Notes |
+| Phase | Status | Check result | Notes |
 |---|---|---|---|
-| 0 Setup | built, awaiting keys | Repo structure, `.gitignore` (with `.env`), `.env.example`, Makefile, README, Python 3.12 env and all dependencies done. Smoke tests written (`scripts/smoke_cognee.py`, `scripts/smoke_stripe.py`), **not run** as instructed. | Versions recorded in section 2. Cognee agent skills installed (`.agents/skills`, linked from `.claude/skills`). |
-| 1 Demo data + ingestion | partial (counts ✅; memory part awaiting keys) | `test_phase1_counts` passes: Acme 1 contract, Sep 2 emails + 1 time entry, Oct 8 Slack / 4 emails / 3 calendar / 9 time entries; Bright Bakery 1 contract, 3 emails, 1 calendar, 3 time entries; 1 unassigned (N03); G1 routed to both datasets, G2 to Acme. `remember()` code written, not run. **Pending:** "remembered into both datasets" and the recall "What did Anna ask for on 22 October?" (`make phase1`). | Contract PDFs rendered from the .md with `scripts/render_contracts.py`; clause parsing from the PDF is tested. |
-| 2 Terms and rules | built, awaiting keys | Not run. `make phase2` checks every required term against section 11, plus G1/G2 params. | The deterministic validation of LLM output is unit-tested. |
-| 3 The brain | built, awaiting keys | `make acceptance` not run (needs the LLM). | Extraction, time matching, decisions, explanations, decision write-back all written. Deterministic parts tested. |
-| 4 Stripe billing | built, awaiting keys | Not run. `make billing-check` / `make pay-check` written. | Duplicate guard and "failed run never retried" are unit-tested; demo clock tested. Payment status by polling (no webhook secret); the webhook endpoint is also built. |
-| 5 Dashboard | partial | All pages built (Overview, Client, Ask Tab, Memory, Invoice, Proof, Settings). Typecheck and build clean. Four pages checked by screenshot in the no-key state. **Pending:** "every number matches the database" and "Why? works on every card" need decisions; the Invoice and Proof pages have no data to render yet. | Dark mode skipped (optional in PLAN.md). |
-| 6 Proof page + disputes | built, awaiting keys | Not run. `make phase6` checks the proof link on the Stripe invoice, the Careers dispute (upheld, cites 2.1 and the 22 Oct email) and the phone-call dispute (escalated). | The precondition logic is unit-tested. |
-| 7 Health report | built, awaiting keys | Number logic and badge thresholds unit-tested on synthetic decisions. The real Acme/Bright Bakery numbers are checked by `make acceptance`. | Narrative is LLM plus a number-whitelist check (unit-tested). |
-| 8 Live sources | not tested | Slack (`conversations.history`) and IMAP pollers written; no credentials. | Settings shows "Live" only after a successful poll. |
-| 9 Polish + demo readiness | partial | Without keys: `make reset` 4.2 s, `make seed` 0.3 s (files only). README with setup, env vars, commands and demo script done. **Pending:** full seed time with keys. | |
+| 0 Setup | done | `make smoke-cognee` PASS: remember 60.3 s, recall 2.8 s, answer "The Careers page (for Acme Outdoor Ltd)." `make smoke-stripe` PASS: created and deleted `cus_VRnTlJHD4xA1BD`, livemode False. | Versions in section 2. |
+| 1 Demo data + ingestion | done (one check not run) | Counts unit test passes. **All 39 client source items remembered:** acme contract 1, slack 8, email 6, calendar 3, timelog 10, goodwill_rules 2; bright-bakery contract 1, email 3, calendar 1, timelog 3, goodwill_rules 1. | The recall check "What did Anna ask for on 22 October?" was **not run** (`make phase1`), to avoid touching Cognee's stores while the API runs. The smoke test shows the same kind of recall working. |
+| 2 Terms and rules | done | `make phase2`: **51/51 PASS** (every required term and value from section 11, clause refs, G1 and G2). | Needed one fix: a retry when the model omits keys (section 9). |
+| 3 The brain | partial | Acceptance Acme 15/16, Bright Bakery 2/4 (section 4). | 20 decisions, 0 errors. |
+| 4 Stripe billing | done (payment pending) | One Acme invoice of £487.50, 8 Stripe lines (5 billable, 3 at £0), no Bright Bakery invoice. The second run created nothing; Stripe has exactly 1 invoice for the customer and period. | `make billing-check` crashed **after** these checks on a bug in the check script itself (fixed). Payment is left for the video; `make pay-check` was not run, as you asked. |
+| 5 Dashboard | done (spot-checked) | The Overview stats match the database (£487.50 recovered, 3 favours worth £37.50, 0 needs review, 1 invoice raised). Acme page and proof page checked by screenshot. | Not every "Why?" panel was opened one by one. Billing policy card added. |
+| 6 Proof page + disputes | partial | The proof page renders with all 8 lines; the Stripe invoice carries the proof link (custom field and description). | Dispute checks (`make phase6`) **not run**, so the disputes you make on camera are the first. |
+| 7 Health report | partial | Badges correct: Acme "Over scope", Bright Bakery "Healthy". The numbers differ from 13.3 because of the matching misses (section 4). | The narrative ("Write recommendation") was not generated. |
+| 8 Live sources | not tested | No credentials, as agreed. | |
+| 9 Polish + demo readiness | done | Seed time measured (section 6); README updated. | |
 
 ## 4. Acceptance results
-- `make acceptance` was **not run**: it needs `LLM_API_KEY` (request extraction and scope checks are LLM calls). Without a key it prints `SKIPPED: LLM key missing ...` and exits 2. No output can be pasted yet.
-- Accuracy: pending. The script prints X / 16 Acme checks (13 decisions + N01, N02, N03) and Y / 4 Bright Bakery decisions, plus totals (£487.50 / 5 lines, £37.50 / 3 goodwill lines) and the health numbers from section 13.3.
-- Mismatches: none known yet. The expected table lives only in `backend/scripts/acceptance.py`, copied from PLAN.md section 13 without changes.
-- Real output of `make test` (the part that can run now):
-  ```
-  cd backend && .venv/bin/python -m pytest -q
-  .......................................................................  [100%]
-  71 passed in 0.33s
-  ```
-  (test_money 17, test_goodwill 12, test_config 10, test_routing 6, test_terms_and_rules 6, test_meetings 5, test_clock 4, test_invoicing 4, test_misc 4, test_ingest 3)
+`make acceptance` re-runs the pipeline, so per your instruction it was **not** run that way. The same script was run as `scripts/acceptance.py --no-run`, which scores the decisions already in the database with **no LLM calls**:
+```
+== acme (2026-10) ==
+FAIL  A02  expected 1 request, got 2: Tighten the headline on the Home page to 'Gear up for every trail'.; Change the main button colour on the Home page to forest green (#2F5D3A).
+PASS  A03  billable, 90->90 min, £75.00 / £75.00, clauses ['3.2', '3.3', '5.2', '5.3'], rules []
+PASS  A04  goodwill, 15->15 min, £0.00 / £12.50, clauses ['2.4', '5.2', '5.3', '5.4'], rules ['G1']
+PASS  N01  not a request
+PASS  A05  billable, 180->180 min, £150.00 / £150.00, clauses ['2.4', '5.2', '5.3', '5.4'], rules []
+PASS  A06  included, 60->0 min, £0.00 / £0.00, clauses ['4.1'], rules []
+PASS  N02  not a request
+PASS  A07  goodwill, 15->15 min, £0.00 / £12.50, clauses ['2.4', '5.2', '5.3', '5.4'], rules ['G1']
+PASS  A08  included, 60->0 min, £0.00 / £0.00, clauses ['4.1'], rules []
+PASS  A09  billable, 15->15 min, £12.50 / £12.50, clauses ['2.4', '5.2', '5.3', '5.4'], rules ['G1']
+PASS  A10  billable, 240->240 min, £200.00 / £200.00, clauses ['2.4', '5.2', '5.3', '5.4'], rules []
+PASS  A11  included, 30->0 min, £0.00 / £0.00, clauses ['2.3'], rules []
+PASS  A12  billable, 60->60 min, £50.00 / £50.00, clauses ['4.2', '5.2'], rules []
+PASS  A13  goodwill, 10->15 min, £0.00 / £12.50, clauses ['2.4', '5.2', '5.3', '5.4'], rules ['G2']
+PASS  A14  no_work_logged, 0->0 min, £0.00 / £0.00, clauses [], rules []
+PASS  N03  unassigned and ignored
+== bright-bakery (2026-10) ==
+FAIL  B01  expected 1 request, got 3: Move the pastries section to the first page.; Make the prices a bit larger, people at the back of the queue can't read them.; Use the darker brown from the logo for headings.
+PASS  B02  included, 30->0 min, £0.00 / £0.00, clauses ['4.1'], rules []
+FAIL  B03  category included (expected goodwill); value £0.00 (expected £12.50); rule G1 not cited (got []); favour number None (expected 1)  [got: included, 10->0 min, £0.00 / £0.00, clauses ['2.1', '3.2'], rules []]
+PASS  B04  included, 60->0 min, £0.00 / £0.00, clauses ['2.1', '3.2'], rules []
+== totals and health ==
+PASS  acme totals  billable £487.50 (5 lines), goodwill £37.50 (3 lines)
+FAIL  acme health  total 12.92 h, in scope 2.50 h, beyond 10.42 h, share 80.6%, badge Over scope
+PASS  bright-bakery totals  billable £0.00 (0 lines), goodwill £0.00 (0 lines)
+FAIL  bright-bakery health  total 1.67 h, in scope 1.67 h, beyond 0.00 h, share 0.0%, badge Healthy
+SUMMARY: Acme 15/16 (13 decisions + N01, N02, N03), Bright Bakery 2/4 decisions, totals/health 2/4
+ACCEPTANCE FAILED
+```
+- Accuracy: **Acme 15/16, Bright Bakery 2/4.** The money is fully correct for both clients.
+- Mismatches:
+
+| ID | Expected | Got | Likely reason |
+|---|---|---|---|
+| A02 | 1 included request (round 2), 120 min | Split into 2 requests (headline, button colour), both "No time logged" | gpt-5-nano split one feedback email into its bullet points. The 120-min entry ("Home page revisions round 2") was then matched at confidence 0.60, below the 0.7 bar, so it was left unmatched (shown in the feed and on the client page). Money is unaffected, since it would have been £0. |
+| B01 | 1 included request (round 1), 60 min | Split into 3 requests, all "No time logged" | Same as A02 (match confidence 0.40). |
+| B03 | goodwill (G1), worth £12.50 | included, clauses 2.1 and 3.2 | The model judged the croissant price change part of the menu revision allowance. PLAN.md says it is a content update, not a revision round. A model-quality miss; no invoice either way. |
+| Acme health | 14.92 h / 4.50 h / 69.8% | 12.92 h / 2.50 h / 80.6% | Consequence of A02: its 120 min are not counted. The badge is still "Over scope". |
+| Bright Bakery health | 6.3% | 0.0% | Consequences of B01 (60 min not counted) and B03 (counted as included). The badge is still "Healthy". |
+
+- Your rule was "switch back to the default model if fewer than 12/16 Acme". Acme scored 15/16, so gpt-5-nano was kept. Per your later instruction there was no reset or reseed, so no attempt was made to improve the Bright Bakery results. The expected table was not edited.
+- `make test`: 71 passed.
 
 ## 5. Stripe results
-- No Stripe calls yet (the key is a placeholder). No invoice id, total or line count to report. Whether Stripe accepts £0 invoice items is unknown. If it rejects them, the code moves goodwill lines to the invoice footer and records a note (PLAN.md 9.1 step 5).
-- Parameters checked against the docs and the installed library (16.0.0): `InvoiceItem.create(customer, invoice, currency, amount, description, metadata)`, `Invoice.create(customer, collection_method="send_invoice", days_until_due, currency, description, metadata, custom_fields)`. Custom fields allow a name up to 40 characters, a value up to 140, and at most 4 fields; the proof URL is about 60 characters. Also `Invoice.finalize_invoice`, `send_invoice`, `pay(payment_method=...)` (the payment method must belong to the customer, so `pm_card_visa` is attached first), `Webhook.construct_event`, and `stripe.InvalidRequestError` / `StripeError` / `SignatureVerificationError`.
-- Payment status: polling every 60 s (no `STRIPE_WEBHOOK_SECRET`, as you asked). The webhook endpoint is built but returns 400 while no secret is set. Not verified yet.
+- Invoice **`in_1UQudoFyqsEONG0f7qVy94Hp`**, customer `cus_VRoGIrUE9yr7kA` for Acme Outdoor Ltd, status **open**, total **£487.50 GBP** (Stripe `total=48750`), test mode.
+- **8 lines:** 5 billable (£75.00, £150.00, £12.50, £200.00, £50.00) and 3 at **£0**. **Stripe accepted the £0 invoice items**; the footer fallback was not needed, and the footer is empty.
+- The "Proof of work" custom field was accepted: `http://localhost:5173/proof/VmjSOC8URRmnAhcu91TP7hKLGNRd5HFa`. The link is also in the invoice description.
+- Hosted invoice: https://invoice.stripe.com/i/acct_1UQtEZFyqsEONG0f/test_YWNjdF8xVVF0RVpGeXFzRU9ORzBmLF9WUm9HQjlkSGZUcFNQMzdpWmlrQ1gwUzFZVFBETjVULDE4MjYzNDU4Nw0200XE4s3daw?s=ap
+- No Bright Bakery invoice. The second billing run created nothing (1 Tab invoice row; 1 Stripe invoice for the customer and period).
+- Payment status: polling every 60 s (no webhook secret). **Not yet observed turning "paid"**: you'll pay on camera with 4242 4242 4242 4242.
 
 ## 6. Cognee usage
-- Datasets: `client_acme`, `client_bright-bakery`. Node sets: `contract`, `goodwill_rules`, `slack`, `email`, `calendar`, `timelog`, `decision`, `invoice`, `dispute`, plus `simulated` (each together with the client slug). `remember()` is batched per client per source. Goodwill rules are remembered into every client dataset they apply to.
-- `self_improvement=False` (PLAN.md default; `TAB_COGNEE_SELF_IMPROVEMENT=true` turns it on). Seeding time: **pending** (it needs the key; `make seed` prints it).
-- Local stores: `backend/.cognee/` (`DATA_ROOT_DIRECTORY` and `SYSTEM_ROOT_DIRECTORY`), gitignored.
-- Differences from PLAN.md section 7 and the docs, found in the installed 1.6.4 source:
-  1. **`RecallPreconditionError` is not an importable class.** It is a `cognee.exceptions.CogneeValidationError` whose `.name == "RecallPreconditionError"`. The wrapper catches it that way.
-  2. **On an empty or failed graph, `recall()` does not raise.** It returns one `source="system"` item with `status="memory_warming_up"` or `"build_failed"`. The wrapper turns this into a clear "memory empty" error, so a marker is never used as context.
-  3. `recall()` may append `source="skills"` items to procedural-sounding queries (the skill gate). Tab only uses `source="graph"` items and sets `SKILL_GATE_ENABLED=false` by default.
-  4. With caching on, `AUTO_FEEDBACK` (default true) adds one LLM call per answered recall. Tab sets `AUTO_FEEDBACK=false` by default (overridable in `.env`).
-  5. Cognee looks for `.env` only up to the nearest `pyproject.toml` (that is `backend/`), so Tab sets `COGNEE_ENV_FILE` to the repo-root `.env`. Cognee logs that values in that file take precedence over variables already set in the environment.
-  6. `visualize_graph(destination_file_path, ..., dataset=...)` renders **one dataset per call** and returns the HTML. The Memory page therefore has a client selector rather than one combined graph.
-  7. The Cognee docs say scripts should call `await cognee.wait_for_background_tasks()` before exiting. The seed, acceptance, phase-check and smoke scripts do so.
-  8. `cognee.forget(everything=True)` works with no data and no key. It returned `{'datasets_removed': 0, 'status': 'success'}`.
-  9. Structured LLM calls go through `cognee.infrastructure.llm.LLMGateway.acreate_structured_output`. The default `litellm_native` backend tries OpenAI strict JSON-schema mode and falls back to non-strict if strict mode is rejected. Whether my schemas pass strict mode is unverified.
+- Datasets `client_acme` and `client_bright-bakery`. Node sets used: contract, goodwill_rules, slack, email, calendar, timelog, decision (14 Acme and 6 Bright Bakery decisions written back), invoice (1).
+- `self_improvement=False`. **Seeding:**
+  - 11 `remember()` batches took **1,442.6 s** (about 2–2.5 min per batch with gpt-5-nano); the whole seed took 1,838.1 s.
+  - The incremental run (terms retry, 20 decisions, decision write-back) took 952.8 s.
+  - I did not measure `self_improvement=True`; it would only be slower.
+- Differences from PLAN.md section 7 (unchanged from the first report):
+  1. `RecallPreconditionError` is a `CogneeValidationError` with that `.name`, not an importable class.
+  2. An empty graph returns a `source="system"` "memory_warming_up" marker instead of raising.
+  3. A skill gate can append `source="skills"` items to answers; disabled here.
+  4. `AUTO_FEEDBACK` adds an extra LLM call per recall; disabled here.
+  5. Cognee's `.env` lookup stops at `backend/pyproject.toml`, so Tab sets `COGNEE_ENV_FILE`.
+  6. `visualize_graph` renders one dataset per call.
+  7. Scripts must call `wait_for_background_tasks()` before exiting.
+  8. Tab's structured LLM calls go through Cognee's `LLMGateway`. With gpt-5-nano this works: every terms, extraction, matching, scope and explanation call returned a valid result.
 
 ## 7. Deviations from the plan
-1. **Extra columns** (all additive, marked "Not in PLAN.md" in `models.py`):
-   - `GoodwillRule.parse_status` / `parse_note`: tells "not understood" apart from "not parsed yet because the key is missing".
-   - `Request.is_future_work`: from the step-3 output schema.
-   - `TimeEntry.matched_at`: avoids asking the LLM twice about the same entry.
-   - `Decision.counts_towards_allowance`: G2 typo fixes don't use the allowance.
-   - `Invoice.notes` and `remembered_at`: record Stripe fallbacks and whether the invoice was remembered.
-   - `Dispute.outcome_reason` and `remembered_at`: Maya sees why a dispute was escalated; the client doesn't.
-2. **Three extra contract-term keys:** `out_of_scope_clause`, `extra_revisions_clause` and `extra_meetings_clause`. They let decisions cite 2.4, 3.3 and 4.2 without hardcoding clause numbers, and are treated as required like the others (if any is missing, the client's decisions are put on hold and reported).
-3. **The hourly-rate clause (5.2) is added to `clause_refs`** for billable and goodwill decisions. Billable line descriptions therefore read, for example, "… @ £50/h, clause 2.4, 5.2".
-4. **Disputes are remembered after the reply**, not before (PLAN.md 10.3 lists save, remember, recall, reply). Building the graph would otherwise delay the reply well past "a few seconds". The remembered record includes the outcome.
-5. **Placeholder detection:** a key that is very short or contains `xxx`, `...`, `your`, and so on is treated as missing. This is how the current `.env` is detected.
-6. **`DATABASE_URL=sqlite:///./tab.db` resolves relative to `backend/`**, whatever the working directory.
-7. **The repo root is the project root**, with no `tab/` subfolder.
-8. **TypeScript 5.9 instead of the newest 7.x.** 7.x is a major rewrite and I didn't want to depend on it untested.
-9. **Record formats:** time-entry records use `Text: N min logged: <description>`. Calendar records use `Meeting '<title>' on <date> from <start> to <end> (N min). Attendees: …`.
-10. **`goodwill_rules.md` format:** each rule has an `## G1` heading and an `Applies to: all clients | <slug>` line, so who a rule applies to is parsed deterministically, never by the LLM.
-11. **Bright Bakery contract wording** (section 11.2 only gave its terms; "same structure" as Acme). I wrote 2.2 "supplied as a print-ready PDF", 2.3 "fixes to errors in delivered designs are included for 30 days", 3.1 "feedback by email", and 5.1 a £900 fixed fee. I added no clause about price changes; B03 has to be judged from the general terms.
-12. **The invoice event uses the full client name:** "Raised invoice for Acme Outdoor Ltd: £487.50, 5 billable lines, 3 favours".
-13. **Overview shows the latest period up to "now" that has requests**, not strictly the calendar month of "now". After jumping to 1 Nov 09:00 it still shows October, the period just invoiced.
-14. **Consistency guards return `needs_review` instead of guessing:**
-    - the LLM says "in scope" but counts more revision rounds than the contract includes;
-    - no valid contract clause was cited.
-    Cited clause numbers that aren't in the contract are dropped.
-15. **The billing job only runs with a Stripe key.** Without one it logs "Stripe key missing" once per closed period. It doesn't log "nothing to bill" then either.
-16. **Only the health narrative is checked for invented numbers.** Decision explanations are prompted to use only the given facts but aren't number-checked, because dates and clause numbers make a strict check unreliable.
-17. **Editing a goodwill rule** re-decides the current display period, but only for clients with no invoice for it. Decision records already in Cognee are not deleted (memory keeps the history).
-18. **Cognee agent skills** were copied into `.agents/skills` and linked from `.claude/skills`, as the Cognee docs describe.
+Unchanged from the first report:
+1. Extra columns, all additive: rule parse status, `is_future_work`, `matched_at`, `counts_towards_allowance`, invoice notes and `remembered_at`, dispute `outcome_reason`.
+2. Extra required term keys `out_of_scope_clause`, `extra_revisions_clause` and `extra_meetings_clause`.
+3. The rate clause, and here often 5.3 and 5.4 as well, appears in `clause_refs`, so line descriptions read "clause 2.4, 5.2, 5.3, 5.4".
+4. Disputes are remembered after the reply.
+5. Placeholder-key detection.
+6. The SQLite path resolves relative to `backend/`.
+7. The repo root is the project root.
+8. TypeScript 5.9.
+9. Record formats for time entries and calendar events.
+10. `goodwill_rules.md` has an "Applies to:" line.
+11. Bright Bakery contract wording.
+12. The invoice event uses the full client name.
+13. Overview shows the latest period with requests.
+14. Consistency guards return `needs_review`.
+15. The billing job needs a Stripe key.
+16. Only the health narrative is checked for invented numbers.
+17. Rule edits re-decide un-invoiced periods only.
+18. Cognee skills installed in `.agents/skills`.
+
+New in this session:
+
+19. **Terms extraction retries once** when required keys are missing, telling the model which keys it left out. Nothing is defaulted; if keys are still missing, decisions stay on hold as before.
+20. **The pipeline was finished with an incremental run** (`run_pipeline` on the existing database, a one-off script in the session scratchpad), not a second `make seed`. Memory and ingestion were kept.
+21. **Billing policy card** on the Overview page (static text describing existing guardrails; no new logic).
+22. **Demo state differs from "31 Oct 18:00, no invoice"**, per your change of plan: the demo clock is at **1 Nov 09:00** and the Acme invoice is already raised (open, unpaid).
 
 ## 8. Unclear / needs decision
-1. **Time-matching window** (8.2, "within −1 to +3 days of the entry date"). The direction is ambiguous. **Chosen:** the time entry date minus the request date is between −1 and +3 days (work is logged from 1 day before to 3 days after the request). **Alternative:** the literal reading, request date minus entry date between −1 and +3. Both give the same candidates for the demo data, since every entry is on its request's day.
-2. **September history** ("for memory only, never billed in October"). **Chosen:** seed sets `tab_start_period = 2026-10`. Items before it are remembered in Cognee but never extracted, decided or billed, and the Client page shows them as "History". **Alternative:** decide September too. It would never be invoiced, since S01 is included and S02 has no time.
-3. **Disputes on meeting lines** (10.3 requires "a matched time entry"). Meetings have no time entry (the calendar event is the time evidence). **Chosen:** the literal reading, so a dispute on the A12 meeting line is escalated to Maya. **Alternative:** count the calendar event as time evidence.
-4. **How acceptance reads the "Clause / rule" column.** **Chosen:**
-   - each listed clause or rule must be among the decision's cited refs (extra refs such as 5.2 are allowed);
-   - "2.1 / 2.4" means at least one of them;
-   - A09 "2.4 + G1 allowance used" means clause 2.4 is cited and G1 is in `rule_refs`; Tab cites the rule whose allowance ran out;
-   - "round 2 / round 3" and Bright Bakery's "revisions round 1/2" are checked against `Request.revision_round`;
-   - "favour 1 of 2" is checked by counting allowance favours in date order.
-   **Alternative:** check only category and amounts.
-5. **Health narrative and numbers:** "must not contain any number that isn't in the deterministic set". **Chosen:** it may use the listed numbers in any formatting, plus the percentage rounded to a whole number ("70%", as in the demo script). Anything else is rejected once, then the narrative is withheld with a note. **Alternative:** exact strings only.
-6. **"Favours used" on the health panel:** **Chosen:** allowance favours only (Acme "2 of 2"), with always-free typo favours shown separately ("+1 typo fix, always free").
-7. **An over-length meeting** (not in the demo): the health report counts its whole duration as beyond scope, while only the overrun is billed.
-8. **The Stripe Customer idempotency key** is `tab-customer-<id>-<slug>`. If you reset within 24 hours, Stripe hands back the same test customer, which is harmless. Invoice and item keys use the invoice's random proof token, so re-billing after a reset is never blocked by a reused key.
+Unchanged from the first report:
+1. Time-matching window direction (chose entry − request ∈ [−1, +3] days).
+2. September is history only.
+3. Disputes on meeting lines are escalated (no time entry).
+4. How acceptance reads the clause and rule columns.
+5. Health narrative number rounding.
+6. "Favours used" counts allowance favours only.
+7. Over-length meetings in the health report.
+8. Idempotency keys.
+
+New:
+
+9. **Should one feedback message be one request?** gpt-5-nano splits multi-point feedback emails (A02, B01) into several requests, and then a single time entry can't cover all of them. **Current:** each split request is decided separately, so the unmatched ones show "No time logged". **Options:** tell the extraction prompt that one revision round is one request, or let a time entry cover several requests from the same message. Either needs a re-run of the pipeline.
+10. **gpt-5-nano or the default model?** Acme scored 15/16, so it passed your threshold of 12. A stronger model would likely fix B03 and the splitting, at about 4x the price for gpt-5.6-luna.
 
 ## 9. Blockers and errors
-1. **Blocker: no real API keys.** The `.env` values are placeholders, so `llm_key_status()` reports "LLM key missing: LLM_API_KEY in .env looks like a placeholder" and `stripe_key_status()` reports "Stripe key missing: STRIPE_SECRET_KEY in .env looks like a placeholder. Billing is disabled." Everything that needs them is built and waiting.
-2. Contract PDF rendering, first attempt: `fpdf.errors.FPDFException: Not enough horizontal space to render a single character`. `multi_cell` left the cursor at the right margin. Fixed by passing `new_x="LMARGIN", new_y="NEXT"`.
-3. My own probe, not app code: `FileNotFoundError: COGNEE_ENV_FILE=/dev/null does not name a file.` Cognee needs a real file, so I re-ran the probe with an empty file.
-4. Unverified risks, listed so they aren't a surprise:
-   - whether OpenAI accepts the response schemas in strict mode (Cognee falls back to non-strict automatically);
-   - whether Stripe accepts `amount=0` invoice items (a fallback is built);
-   - LLM accuracy on the 17 acceptance decisions.
+1. **First seed: 0 decisions.** `terms_incomplete`: "Contract terms missing for Acme Outdoor Ltd: out_of_scope_examples. Decisions are on hold." The same happened for Bright Bakery.
+   - Cognee's recall of the contract was correct.
+   - gpt-5-nano returned null for that one key.
+   - Fixed with the single retry (section 7, item 19). The incremental run then extracted 14 terms per client.
+2. **`make billing-check` crashed after the invoice was raised and verified**: `AttributeError: 'get' is a dict method, but a StripeObject is not a dict.` The cause was `(i.metadata or {}).get(...)` in the check script. Fixed with `.to_dict()`. I didn't re-run it (you asked for one run); I verified the remaining checks read-only (section 5). The same pattern was fixed in `phase_checks.py` (custom fields).
+3. **The Settings page showed Stripe as "Error"** because of the same `.get()` pattern in `account_summary()`. Fixed; it now shows "Test mode connected · acct_1UQtEZFyqsEONG0f".
+4. Earlier errors (contract PDF rendering, `COGNEE_ENV_FILE=/dev/null`) are unchanged from the first report and were resolved then.
 
 ## 10. Not done / pending
-Prioritised:
-1. Add the real keys, then run the Phase 0 smoke tests and record their output.
-2. `make reset && make seed` with keys: record the seeding time and run the Phase 1 memory checks and the Phase 2 terms and rules checks.
-3. `make acceptance`: record accuracy and every mismatch. Fix mismatches by improving prompts or logic, never by editing the expected table.
-4. The Phase 4 billing check and the payment check.
-5. The Phase 6 dispute checks.
-6. Phase 5 with data: on-screen numbers against the database, "Why?" on every card, the Invoice and Proof pages rendered with a real invoice.
-7. The Phase 7 narrative for Acme ("Over scope") and Bright Bakery ("Healthy").
-8. Measure seeding with `self_improvement=True` against `False`.
-9. Phase 8, live Slack and IMAP: **not tested** (no credentials, as agreed).
-10. Dark mode (optional; skipped).
-11. Nothing has been committed to git (you didn't ask). `.env`, `backend/.venv`, `backend/.cognee`, `backend/tab.db` and `frontend/node_modules` are gitignored.
+1. Disputes on camera. The Careers line should be upheld; "Maya told me on the phone it was free" should be escalated. Neither has been verified yet.
+2. Payment on camera, then watch polling turn the status "paid" within 60 s. Not yet observed.
+3. Not exercised with keys yet: Ask Tab answers, the Memory graph render ("Refresh graph"), and the health recommendation paragraph.
+4. `make phase1` (one recall) and `make phase6` were not run.
+5. Improve B03, A02 and B01 (prompt change or a stronger model), then re-seed. Needs your decision (section 8).
+6. Live Slack and IMAP: not tested.
+7. Dark mode: skipped (optional).
+8. Two cosmetic issues: the A14 card repeats "No time logged"; the model tagged the contact-form bug fix as "revision round 1".
 
 ## 11. How to run the demo
-From a clean clone:
-```bash
-cp .env.example .env    # set LLM_API_KEY (OpenAI) and STRIPE_SECRET_KEY (sk_test_...)
-make setup
-make reset && make seed && make dev
-# open http://localhost:5173 and follow the demo script in README.md
-```
+The current state is ready to record. `make dev` is running (API :8000, web :5173), the demo clock is at 1 Nov 09:00, and the Acme invoice is raised and open.
+- Overview: http://localhost:5173
+- Acme: http://localhost:5173/clients/acme
+- Proof page: http://localhost:5173/proof/VmjSOC8URRmnAhcu91TP7hKLGNRd5HFa
+- Stripe hosted invoice: section 5
+
+From a clean clone: `cp .env.example .env` (set the keys), `make setup && make reset && make seed && make dev`.
+
 Known issues:
-- Without keys the app runs, but there are no decisions, invoices, Ask Tab answers or graph, and each place says why.
-- `make seed` makes many LLM calls: Cognee graph building per batch, about 15 extractions, about 15 time matches, 17 scope checks and explanations. Expect minutes, not seconds; the time is pending measurement.
-- Don't run `make seed` while `make dev` is running. Both write to the same local Cognee stores; use Settings, "Reset demo" instead.
-- Phase 6 checks and manual disputes leave dispute rows. Run `make reset && make seed` before recording.
-
-## To run once keys are added
-Run in this order from the repo root (`make dev` stopped):
-```bash
-# 0. Put the real keys in .env: LLM_API_KEY=sk-... (OpenAI) and STRIPE_SECRET_KEY=sk_test_...
-
-# 1. Phase 0 smoke tests (expect PASS from both; output lists cognee/stripe/python versions)
-make smoke-cognee
-make smoke-stripe
-
-# 2. Fresh seed (prints remember() time and total seed time)
-make reset && make seed
-
-# 3. Phase 1 and 2 checks
-make phase1
-make phase2
-
-# 4. Acceptance (PLAN.md section 13); paste the full output into REPORT.md section 4
-make acceptance
-
-# 5. Phase 4 billing: jumps the demo clock to 2026-11-01 09:00 and verifies Stripe;
-#    then pays it with the test card through the API and checks Tab marks it paid
-make billing-check
-make pay-check
-
-# 6. Phase 6: proof link on the Stripe invoice, Careers dispute upheld, phone-call dispute escalated
-make phase6
-
-# 7. Phases 5 and 7 by hand, then reset for a clean demo
-make reset && make seed && make dev   # check the pages; on 1 Nov the invoice is raised again in Stripe test mode
-```
-Checks still pending (all need keys unless marked):
-- Phase 0: Cognee remember/recall round trip; Stripe test Customer create and delete.
-- Phase 1: every source item remembered in its client dataset; goodwill rules remembered into both datasets; recall "What did Anna ask for on 22 October?" mentions the Careers page.
-- Phase 2: all required ContractTerm keys for both clients with the section 11 values; G1 and G2 parsed correctly.
-- Phase 3: `make acceptance` (16 Acme checks, 4 Bright Bakery decisions, totals, health numbers).
-- Phase 4: exactly one Acme invoice of £487.50 with 5 billable and 3 goodwill lines; no Bright Bakery invoice; a second run creates nothing; whether £0 lines were accepted; paid status reaches Tab by polling.
-- Phase 5: every number on screen matches the database; "Why?" works on every card; Invoice and Proof pages render with real data.
-- Phase 6: the Stripe proof link opens the page; Careers dispute upheld, citing 2.1 and the 22 Oct email; "Maya told me on the phone it was free" escalated.
-- Phase 7: Acme 14.92 h / 4.50 h / 10.42 h / 69.8%, badge "Over scope"; Bright Bakery 6.3%, "Healthy"; narrative written without invented numbers.
-- Phase 8: live Slack message decided within 60 s. **Not tested: no credentials** (as agreed).
-- Phase 9: full `make reset && make seed` time with keys.
+- The seed takes about 45 min with gpt-5-nano.
+- Don't run `make seed` while `make dev` is running.
+- Settings, "Reset demo" wipes everything and re-seeds (another ~45 min), and a new invoice would be raised on the next jump to 1 Nov.

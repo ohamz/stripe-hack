@@ -81,7 +81,8 @@ Code map: `backend/app/connectors` (sources), `backend/app/memory` (Cognee), `ba
 
 ## Demo script (about 2 minutes)
 
-Before recording: `make reset && make seed && make dev`, open http://localhost:5173.
+Before recording: `make reset && make seed && make dev`, open http://localhost:5173. (In the current recorded state
+the clock is already at 1 Nov 09:00 and the Acme invoice is raised, so step 5 shows the existing invoice in the feed.)
 
 1. **Problem (15 s):** "Three small favours a week is 4+ hours of unpaid work a month."
 2. **Meet Maya (10 s):** Overview page, two clients.
@@ -100,7 +101,21 @@ Before recording: `make reset && make seed && make dev`, open http://localhost:5
 7. **Memory (10 s):** Memory page, "Refresh graph", then Ask Tab: "Why did you bill Acme £200?"
 8. **Close (10 s):** the Acme health panel: "Over scope", with the recommendation paragraph.
 
+## Results (15 Oct 2026, real keys)
+
+- **Model:** `openai/gpt-5-nano` (`LLM_PROVIDER=openai`, `LLM_MODEL=openai/gpt-5-nano`), the cheapest OpenAI model with
+  structured outputs ($0.05 / $0.40 per 1M input / output tokens). Embeddings: Cognee default `openai/text-embedding-3-large`.
+- **Seed time:** 30.6 min for `make seed`, 24 of them in Cognee `remember()`. A further 15.9 min of incremental pipeline
+  run finished the decisions after a terms-extraction fix. Expect about 45 min from scratch with gpt-5-nano.
+- **Acceptance** (scored read-only on the seeded database): Acme **15/16**, Bright Bakery **2/4**. Totals are exact.
+  Contract terms and rules: 51/51.
+- **Stripe:** one Acme invoice, **£487.50**, 8 lines (5 billable plus 3 "On the house" at £0, which Stripe accepted), the proof link
+  as a custom field, and no Bright Bakery invoice. A second billing run created nothing.
+
+Full details, every mismatch and what is still unverified are in `REPORT.md`.
+
 ## Known limitations
 
-See `REPORT.md` sections 7–10. In short: everything that needs the LLM or Stripe is built but is only verified
-once keys are added; live Slack and IMAP are written but untested.
+See `REPORT.md` sections 7–10. In short: gpt-5-nano splits some multi-point feedback emails into several requests
+(A02, B01) and judged B03 "included"; disputes, Ask Tab, the Memory graph and payment status are not yet verified with
+real keys; live Slack and IMAP are written but untested.

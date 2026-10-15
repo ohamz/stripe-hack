@@ -14,6 +14,30 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub?:
   );
 }
 
+// Guardrails the backend already enforces (see REPORT.md). This card only describes them.
+const POLICY = [
+  "Billed only with evidence (client message, matched time, contract clause) and confidence ≥ 0.7; otherwise held for review.",
+  "One invoice per client per month.",
+  "No automatic refunds or credits.",
+  "Stripe test mode only.",
+];
+
+function BillingPolicy() {
+  return (
+    <Card className="p-5">
+      <SectionTitle>Billing policy</SectionTitle>
+      <ul className="space-y-2 text-sm text-slate-700">
+        {POLICY.map((p) => (
+          <li key={p} className="flex gap-2">
+            <span className="mt-0.5 text-accent">✓</span>
+            <span>{p}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 export default function Overview() {
   const { data, error } = useApi<OverviewT>("/overview", 5000);
   if (error) return <p className="text-red-600">{error}</p>;
@@ -75,7 +99,8 @@ export default function Overview() {
             </p>
           )}
         </div>
-        <div className="lg:col-span-2">
+        <div className="space-y-6 lg:col-span-2">
+          <BillingPolicy />
           <ActivityFeed />
         </div>
       </div>
